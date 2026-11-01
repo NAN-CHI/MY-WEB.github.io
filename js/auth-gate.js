@@ -1,15 +1,28 @@
 /* =========================================================================
-   登录门禁：在 <head> 里同步执行，没有 Supabase 会话就立刻跳登录页
+   登录门禁：在 <head> 里同步执行，没有登录状态就立刻跳登录页
+   （放在 head 里、页面绘制之前跑，所以不会先闪一下内容）
+
+   会话存在 sessionStorage：关掉标签页即失效，下次访问必须重新登录。
+
+   认两种凭证：
+     · jq-auth-session —— Supabase 登录后写入
+     · jq-local-unlock —— 本地口令通过后写入（LOCAL_PASS 留空时不会产生）
    ========================================================================= */
 (function () {
   var SESSION = 'jq-auth-session';
+  var LOCAL   = 'jq-local-unlock';
   var LOGIN   = 'login.html';
   var ok = false;
 
   try {
-    var s = JSON.parse(localStorage.getItem(SESSION) || 'null');
+    var s = JSON.parse(sessionStorage.getItem(SESSION) || 'null');
     if (s && s.access_token) ok = true;
-  } catch (e) { ok = false; }
+
+    var u = JSON.parse(sessionStorage.getItem(LOCAL) || 'null');
+    if (u && u.until && u.until > Date.now()) ok = true;
+  } catch (e) {
+    ok = false;
+  }
 
   if (ok) return;
 

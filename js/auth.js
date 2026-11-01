@@ -1,40 +1,42 @@
 /* =========================================================================
    登录验证（Supabase Auth）—— 不依赖任何 CDN，直接调用 Auth REST API
    -------------------------------------------------------------------------
-   ★ 配置区：换项目时只改这两行
+   会话存在 sessionStorage：关掉标签页或浏览器即失效，下次访问必须重新登录。
+   同一标签页内翻页、刷新不用重新登录（这是 A 方案的设计目标）。
+
+   ★ 配置区：换项目时只需要改 SUPABASE_URL / SUPABASE_KEY 两行
    ========================================================================= */
 (function () {
   'use strict';
 
   /* ---------------------------------------------------------------
      登录方式
-       'local'    = 本地口令，不联网（默认；supabase.co 在国内被墙）
-       'supabase' = 邮箱 + 密码，需要能访问 supabase.co
-     将来网络能通了，把下面这行改成 'supabase' 就切回去。
+        'local'    = 本地口令，不联网
+        'supabase' = 邮箱 + 密码，需要能访问 supabase.co
      --------------------------------------------------------------- */
   var AUTH_MODE = 'supabase';
 
-  /* local 模式的口令：想改就改这一行，然后告诉朋友新口令 */
+  /* local 模式的口令：留空 = 本地口令通道关闭（推荐，源码是公开的） */
   var LOCAL_PASS = '';
-  var LOCAL_DAYS = 30;                      /* 登录状态保留天数 */
+  var LOCAL_DAYS = 30;                      /* 同一标签页内口令凭证的有效天数 */
   var LOCAL_KEY  = 'jq-local-unlock';
 
   /* supabase 模式用（网络能访问 supabase.co 时才用得到） */
   var SUPABASE_URL = 'https://sptzzjkdlkpgjgganxuu.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_WKdrq58Pq_R3c-HdL_Qcmg_Njglqd6S';
 
-  var STORE   = 'jq-auth-session';   // localStorage 里的键名，auth-gate.js 也用这个
+  var STORE   = 'jq-auth-session';   // sessionStorage 里的键名，auth-gate.js 也用这个
   var OPEN_PG = 'login.html';
 
-  /* ---------- 本地会话 ---------- */
+  /* ---------- 会话读写（sessionStorage：随标签页销毁） ---------- */
   function read() {
-    try { return JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) { return null; }
+    try { return JSON.parse(sessionStorage.getItem(STORE) || 'null'); } catch (e) { return null; }
   }
   function save(s) {
-    try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) {}
+    try { sessionStorage.setItem(STORE, JSON.stringify(s)); } catch (e) {}
   }
   function wipe() {
-    try { localStorage.removeItem(STORE); } catch (e) {}
+    try { sessionStorage.removeItem(STORE); } catch (e) {}
   }
   function needsRefresh(s) {
     return !s || !s.expires_at || s.expires_at - Date.now() < 60000;
@@ -76,7 +78,7 @@
   /* ---------- 本地口令 ---------- */
   function localUnlocked() {
     try {
-      var u = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null');
+      var u = JSON.parse(sessionStorage.getItem(LOCAL_KEY) || 'null');
       return !!(u && u.until && u.until > Date.now());
     } catch (e) { return false; }
   }
@@ -92,9 +94,9 @@
 
     signInLocal: function (pass) {
       return new Promise(function (resolve, reject) {
-        if ((pass || '') === LOCAL_PASS) {
+        if (LOCAL_PASS && (pass || '') === LOCAL_PASS) {
           try {
-            localStorage.setItem(LOCAL_KEY, JSON.stringify({ until: Date.now() + LOCAL_DAYS * 86400000 }));
+            sessionStorage.setItem(LOCAL_KEY, JSON.stringify({ until: Date.now() + LOCAL_DAYS * 86400000 }));
           } catch (e) {}
           resolve();
         } else {
@@ -130,7 +132,7 @@
     signOut: function () {
       var s = read();
       wipe();
-      try { localStorage.removeItem(LOCAL_KEY); } catch (e) {}
+      try { sessionStorage.removeItem(LOCAL_KEY); } catch (e) {}
       if (s && s.access_token) {
         try {
           api('/auth/v1/logout', {
