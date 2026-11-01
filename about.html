@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light" />
+<title>关于我 · J Q</title>
+<meta name="description" content="关于 J Q：我在做什么、经历过什么，以及工作以外的事。" />
+<meta name="theme-color" content="#F3EDE3" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%23F3EDE3'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23D8432A'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/style.css" />
+<script>
+  /* 主题：先看上次的选择，没有就跟系统走 */
+  try {
+    var savedTheme = localStorage.getItem('site-theme');
+    if (!savedTheme) {
+      savedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+
+  /* 从别的页面点链接过来时，先让幕布覆盖屏幕，避免第一帧闪白 */
+  try {
+    if (/(?:^|[?&])via=veil(?:&|$)/.test(location.search)) {
+      document.documentElement.classList.add('is-entering');
+    }
+  } catch (e) {}
+</script>
+<script src="js/auth-gate.js"></script>
+</head>
+<body id="top">
+
+<div class="veil" id="veil" aria-hidden="true">
+  <div class="veil__road"></div>
+  <div class="veil__car is-moving" data-car></div>
+  <p class="veil__label" id="veilLabel">关于我 · About</p>
+</div>
+
+<div class="page">
+
+  <header class="topbar">
+    <a class="brand" href="index.html" data-transition data-veil="主页 · Home">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <span>J Q</span>
+    </a>
+    <div class="topbar__right">
+      <nav class="nav" aria-label="主导航">
+        <a class="nav__link" href="index.html?via=veil" data-transition data-veil="主页 · Home">主页</a>
+        <a class="nav__link" href="about.html" aria-current="page">关于我</a>
+        <a class="nav__link" href="works.html?via=veil" data-transition data-veil="作品 · Work">作品</a>
+        <a class="nav__link" href="notes.html?via=veil" data-transition data-veil="笔记 · Notes">笔记</a>
+        <a class="nav__link" href="friends.html?via=veil" data-transition data-veil="朋友们 · Friends">朋友们</a>
+        <a class="nav__link" href="contact.html?via=veil" data-transition data-veil="联系 · Contact">联系</a>
+      </nav>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换到夜间模式">
+        <svg class="theme-toggle__icon theme-toggle__icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.5 14.2A8.6 8.6 0 1 1 9.8 3.5a7 7 0 0 0 10.7 10.7Z"/></svg>
+        <svg class="theme-toggle__icon theme-toggle__icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap page-main">
+
+    <p class="eyebrow">
+      <span class="eyebrow__line" aria-hidden="true"></span>
+      关于我 · About
+    </p>
+
+    <h1 class="page-title">把复杂的东西，<br />做得简单一点。</h1>
+
+    <p class="page-lede">
+      你好，欢迎来到我的个人网页，我是<span class="mark">J Q</span>。一名IT程序员兼前端开发者。<br />
+      我喜欢干净的界面、会呼吸的动效，和一次就懂的交互。
+    </p>
+
+    <div class="divider" aria-hidden="true">
+      <div class="divider__line"></div>
+      <div class="divider__car" data-car></div>
+    </div>
+
+    <!-- ✏️ 关于我：改成你自己的故事 -->
+    <section class="section">
+      <h2 class="section__label">关于我</h2>
+      <div class="section__body">
+        <p>
+          我在贵阳做程序开发，日常我和我的联想Y7000P，代码、咖啡待在一起。
+          从刚开始的一张项目草稿的出现到项目实际出现你的电脑里，我享受这种感觉。
+        </p>
+        <p>
+          过去几年，我在一边学习，上课，一边尝试写一些小代码玩玩，你将会在我的作品里能看到
+        </p>
+      </div>
+    </section>
+
+    <!-- ✏️ 我在做什么：换成你真实的三个方向 -->
+    <section class="section">
+      <h2 class="section__label">我在做什么？</h2>
+      <div class="section__body">
+        <ul class="list">
+          <li class="list__item">
+            <span class="list__num">01</span>
+            <div>
+              <h3 class="list__title">第一身份</h3>
+              <p class="list__desc">我还是一名在校大学生，还在准备考研呢</p>
+            </div>
+          </li>
+          <li class="list__item">
+            <span class="list__num">02</span>
+            <div>
+              <h3 class="list__title">前端开发</h3>
+              <p class="list__desc">用 HTML / CSS / JavaScript 把设计稿变成能跑、能维护的页面。</p>
+            </div>
+          </li>
+          <li class="list__item">
+            <span class="list__num">03</span>
+            <div>
+              <h3 class="list__title">偶尔也研究一下单片机</h3>
+              <p class="list__desc">一直想整一个桌面机器人，现在还在研究当中</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ✏️ 现在：最近在忙什么 -->
+    <section class="section">
+      <h2 class="section__label">现在</h2>
+      <div class="section__body">
+        <p>
+          我在学校上着课，也正在备考研究生，偶尔写写代码。课余时间在写一个微信小程序[手记]，这个程序可以让你随时随地的写写东西。
+        </p>
+      </div>
+    </section>
+
+    <!-- ✏️ 经历：换成你真实的年份与经历 -->
+    <section class="section">
+      <h2 class="section__label">经历</h2>
+      <div class="section__body">
+        <ol class="timeline">
+          <li class="timeline__item">
+            <span class="timeline__year">2026-至今</span>
+            <h3 class="timeline__title">在校大学</h3>
+            <p class="timeline__desc">上课，备考研究生</p>
+          </li>
+          <li class="timeline__item">
+            <span class="timeline__year">2025</span>
+            <h3 class="timeline__title">大数据与人工智能实验室</h3>
+            <p class="timeline__desc">主要研究模型训练，偶尔也给AI找些口粮（数据处理）</p>
+          </li>
+          <li class="timeline__item">
+            <span class="timeline__year">2024</span>
+            <h3 class="timeline__title">学校</h3>
+            <p class="timeline__desc">参加我校的大数据开发校赛，获得二等奖</p>
+          </li>
+          <li class="timeline__item">
+            <span class="timeline__year">2023</span>
+            <h3 class="timeline__title">参加云边端AI开发大赛</h3>
+            <p class="timeline__desc">侥幸拿了个国家三等奖</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ✏️ 工具箱 -->
+    <section class="section">
+      <h2 class="section__label">工具箱</h2>
+      <div class="section__body">
+        <ul class="chips">
+          <li>Pycharm</li>
+          <li>IDEA</li>
+          <li>DeepSeek</li>
+          <li>Blender</li>
+          <li>Hbuder x / CSS</li>
+          <li>Java</li>
+          <li>Python</li>
+          <li>MySQL</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ✏️ 工作以外 -->
+    <section class="section">
+      <h2 class="section__label">工作以外</h2>
+      <div class="section__body">
+        <p>
+          骑车、拍照、煮咖啡，偶尔写一点关于设计的文字。
+          天气好的时候会沿着河一直骑到没有路灯的地方，然后再骑回来。
+        </p>
+      </div>
+    </section>
+
+    <!-- ✏️ 问答：换成常被问到的问题 -->
+    <section class="section">
+      <h2 class="section__label">问答</h2>
+      <div class="section__body">
+        <dl class="qa">
+          <div>
+            <dt>你接私活吗？</dt>
+            <dd>接。我以前的一个高中同学给了我一个数据爬取的项目，我就接了、</dd>
+          </div>
+          <div>
+            <dt>一个项目怎么开始？</dt>
+            <dd>先聊半小时的天，把目标、时间和预算说清楚。我会给一份简短的方案和排期，觉得合适再开工。</dd>
+          </div>
+          <div>
+            <dt>你更擅长哪一段？</dt>
+            <dd>从「想清楚」到「做出来」的后面那段——把所有的“幻想”全部一一实现，把它写成能跑的页面。</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+    <!-- ✏️ 基本信息：换成你的城市、邮箱、社交账号 -->
+    <section class="facts">
+      <dl class="facts__grid">
+        <div class="facts__item">
+          <dt>坐标</dt>
+          <dd>中国 · 贵阳</dd>
+        </div>
+        <div class="facts__item">
+          <dt>现在</dt>
+          <dd>看时间接受远程合作</dd>
+        </div>
+        <div class="facts__item">
+          <dt>邮箱</dt>
+          <dd><a href="mailto:2167203486@qq.com">2167203486@qq.com</a></dd>
+        </div>
+        <div class="facts__item">
+          <dt>更多</dt>
+          <dd><a href="#" aria-label="这个等一会加">GitHub / 即刻 ↗</a></dd>
+        </div>
+      </dl>
+    </section>
+
+  </main>
+
+  <footer class="site-foot">
+    <div class="site-foot__inner">
+          <div class="site-foot__cta">
+      <p class="site-foot__title">还想知道点别的？<br />直接问我就好。</p>
+      <div class="site-foot__actions">
+        <a class="cta" href="contact.html?via=veil" data-transition data-veil="联系 · Contact">
+            <span class="cta__dot" aria-hidden="true"></span>
+            <span>联系我</span>
+            <span class="cta__arrow" aria-hidden="true">→</span>
+          </a>
+        <a class="cta cta--flower" href="花.html?via=veil" data-transition data-veil="花 · Flowers">
+          <span class="cta__flower" aria-hidden="true">✿</span>
+          <span>看到最后了，送你一朵花吧</span>
+        </a>
+      </div>
+    </div>
+
+<div class="site-foot__meta">
+        <span>© 2026 J Q</span>
+        <div class="site-foot__links">
+          <a href="mailto:2167203486@qq.com">Email</a>
+          <a href="#" aria-label="GitHub">GitHub</a>
+          <a href="#" aria-label="即刻">即刻</a>
+        </div>
+        <a href="#top">回到顶部 ↑</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<noscript>
+  <style>
+    html.is-entering .veil { display: none !important; }
+  </style>
+</noscript>
+
+<!-- 落下来的小信封：点一下直接写邮件 -->
+<a class="envelope" href="mailto:2167203486@qq.com" aria-label="写信给我" title="写信给我">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <rect x="2.5" y="5" width="19" height="14" rx="2.6"/>
+    <path d="M3.2 6.4 12 12.7l8.8-6.3"/>
+  </svg>
+</a>
+<script src="js/car.js" defer></script>
+<script src="js/app.js" defer></script>
+<script src="js/letters.js" defer></script>
+<script src="js/auth.js" defer></script>
+</body>
+</html>

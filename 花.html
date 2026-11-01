@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>粒子玫瑰花束</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #04000a; overflow: hidden; }
+  canvas { display: block; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #tip {
+    position: fixed; left: 0; right: 0; bottom: 26px; text-align: center;
+    font: 15px/1.8 "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: rgba(235, 200, 210, .55); letter-spacing: .38em; text-indent: .38em;
+    text-shadow: 0 0 20px rgba(230, 130, 165, .8);
+    pointer-events: none; user-select: none;
+  }
+  /* 过场：从其他页面过来时先是一块黑幕，再淡出露出花束 */
+  .arrive {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #04000a; pointer-events: none;
+    opacity: 1; transition: opacity 1s ease .05s;
+  }
+  .arrive.is-out { opacity: 0; }
+  #back {
+    position: fixed; left: 16px; top: 14px; z-index: 9998;
+    padding: 9px 13px; border-radius: 999px;
+    color: rgba(235, 200, 210, .48);
+    font: 12px/1 "PingFang SC", "Microsoft YaHei", sans-serif;
+    letter-spacing: .24em; text-decoration: none;
+    transition: color .3s ease, background .3s ease;
+  }
+  #back:hover { color: rgba(255, 228, 238, .95); background: rgba(255, 255, 255, .06); }</style>
+<script src="js/auth-gate.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<a id="back" href="index.html">← 返回</a>
+<div class="arrive" id="arrive"></div>
+<div id="tip"></div>
+<script>
+/* ============================================================
+   粒子玫瑰花束
+   纯 Canvas 2D 手写软渲染，不依赖任何第三方库，离线可跑。
+
+   组成：
+     玫瑰   —— 33 朵（1 + 6 + 12 + 14），挤成半球形的花束
+     花茎   —— 从每朵花底部弯到"绑扎点"，再向下扎成一束握把
+     叶子   —— 每根花茎上两片
+     包装纸 —— 5 张外纸围一圈 + 1 层内衬棉纸
+     飘带   —— 白色缎带绑在花茎交界处，两条飘带会轻轻摆动
+
+   ★ 粒子尺寸和密度都跟着花束整体大小自动缩放，
+     所以增删花朵、改纸张，屏幕上的颗粒感都不会变。
+   ============================================================ */
+
+const CAPTION     = '送给我生命中遇到的每一个人 ';      // 底部文字，填上内容就显示（例如 '七夕快乐'）
+const SATURATION  = 1000;    // 玫瑰饱和度：1 = 鲜艳，0 = 全灰
+const GREEN_SAT   = 1;    // 茎叶饱和度（绿色留一点，不然认不出是绿的）
+const TOTAL_SPARK = 5000;     // 周围飘浮的星尘
+const BLOOM_MS    = 3400;    // 整体生长动画时长（毫秒）
+const AUTO_SPIN   = 0.18;    // 自动旋转速度（弧度/秒）
+
+const FOV = 2200, CAM =1760;      // 焦距 / 相机距离（透视强度）
+const SPRITE_MUL = 1.75;           // 每颗粒子画多大
+const DOT_BASE   = 3.0;            // 标准尺寸下粒子的世界半径（随花束大小缩放）
+const REF_FIT_R  = 279;            // 标定基准：单朵玫瑰时的取景半径
+
+/* ---------------- 画布 ---------------- */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let VW = 0, VH = 0, DPR = 1, SCALE = 1;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  VW = window.innerWidth;
+  VH = window.innerHeight;
+  canvas.width  = Math.round(VW * DPR);
+  canvas.height = Math.round(VH * DPR);
+  canvas.style.width  = VW + 'px';
+  canvas.style.height = VH + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+const tip = document.getElementById('tip');
+tip.textContent = CAPTION;
+if (!CAPTION) tip.style.display = 'none';
+
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+const rand = (a, b) => a + Math.random() * (b - a);
+
+/* ---------------- 调色板 → 光点贴图 ---------------- */
+// 每个颜色朝自己的灰度值拉一把，就是"降低饱和度"
+function ramp(stops, t, sat) {
+  t = clamp(t, 0, 1);
+  let c = stops[stops.length - 1][1];
+  for (let i = 1; i < stops.length; i++) {
+    if (t <= stops[i][0]) {
+      const a = stops[i - 1], b = stops[i];
+      const k = (t - a[0]) / (b[0] - a[0]);
+      c = [a[1][0] + (b[1][0] - a[1][0]) * k,
+           a[1][1] + (b[1][1] - a[1][1]) * k,
+           a[1][2] + (b[1][2] - a[1][2]) * k];
+      break;
+    }
+  }
+  const g = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  return [g + (c[0] - g) * sat, g + (c[1] - g) * sat, g + (c[2] - g) * sat];
+}
+
+const SPRITE = 40;
+function makeSprite(c) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = SPRITE;
+  const g = cv.getContext('2d');
+  const h = SPRITE / 2;
+  const r = c[0] | 0, gg = c[1] | 0, b = c[2] | 0;
+  const bright = [Math.min(255, r + 70), Math.min(255, gg + 62), Math.min(255, b + 66)];
+  const grd = g.createRadialGradient(h, h, 0, h, h, h);
+  // 芯子紧、外圈收得快 —— 每颗粒子是一颗看得清的小亮点，而不是一团糊光
+  grd.addColorStop(0.00, `rgba(${bright[0]},${bright[1]},${bright[2]},1)`);
+  grd.addColorStop(0.34, `rgba(${r},${gg},${b},0.92)`);
+  grd.addColorStop(0.52, `rgba(${r},${gg},${b},0.30)`);
+  grd.addColorStop(0.76, `rgba(${r},${gg},${b},0.07)`);
+  grd.addColorStop(1.00, `rgba(${r},${gg},${b},0)`);
+  g.fillStyle = grd;
+  g.fillRect(0, 0, SPRITE, SPRITE);
+  return cv;
+}
+
+const PINK_STOPS = [                       // 玫瑰：花心暗红 → 外层淡粉
+  [0.00, [ 92,  30,  42]], [0.26, [162,  62,  84]],
+  [0.52, [214, 122, 146]], [0.76, [238, 172, 190]],
+  [1.00, [250, 224, 230]],
+];
+const GREEN_STOPS = [                      // 茎叶：深墨绿 → 嫩绿
+  [0.00, [ 18,  58,  30]], [0.34, [ 48, 118,  56]],
+  [0.70, [ 92, 166,  88]], [1.00, [152, 206, 142]],
+];
+const PAPER_STOPS = [                      // 外包装纸：暖灰 → 米白（带一点粉调）
+  [0.00, [ 84,  72,  68]], [0.42, [146, 128, 120]],
+  [0.78, [204, 186, 178]], [1.00, [246, 230, 228]],
+];
+const TISSUE_STOPS = [                     // 内衬棉纸：更白更透
+  [0.00, [126, 118, 122]], [0.42, [186, 178, 184]],
+  [0.78, [226, 220, 226]], [1.00, [252, 248, 250]],
+];
+const RIBBON_STOPS = [                     // 缎带：近乎中性的白，只在暗部带一点冷调
+  [0.00, [138, 136, 148]], [0.35, [196, 196, 208]],
+  [0.70, [234, 234, 244]], [1.00, [255, 255, 255]],
+];
+
+function paletteOf(stops, n, sat) {
+  const arr = [];
+  for (let i = 0; i < n; i++) arr.push(makeSprite(ramp(stops, i / (n - 1), sat)));
+  return arr;
+}
+const PINK   = paletteOf(PINK_STOPS,   28, SATURATION);
+const GREEN  = paletteOf(GREEN_STOPS,  20, GREEN_SAT);
+const PAPER  = paletteOf(PAPER_STOPS,  20, 0.85);
+const TISSUE = paletteOf(TISSUE_STOPS, 20, 0.35);
+const RIBBON = paletteOf(RIBBON_STOPS, 20, 0.12);   // 缎带几乎不降饱和，保持白
+
+/* ---------------- 单朵玫瑰的几何：6 层花瓣 ---------------- */
+const RING_COUNT = 6;
+const ROSE_RINGS = [];
+for (let j = 0; j < RING_COUNT; j++) {
+  const t = j / (RING_COUNT - 1);   // 0 = 花心，1 = 最外层
+  ROSE_RINGS.push({
+    t,
+    petals: 5 + Math.round(t * 5),  // 5 → 10 瓣（共 45 瓣）
+    R:      3 + t * 46,             // 花瓣根部到花轴的距离
+    L:      46 + t * 74,            // 花瓣长度
+    H:      52 - t * 40,            // 根部高度（内层高、外层低）
+    tilt0:  0.10 + t * 0.78,        // 起始倾角（0 = 竖直向上）
+    curl:   1.75 - t * 0.45,        // 沿花瓣长度累积的外卷量
+    halfW:  20 + t * 34,            // 最大半宽
+    cup:    0.42 - t * 0.10,        // 横向抱合（凹面朝花心）
+    ruffle: 0.10 + t * 0.20,        // 花瓣边缘褶皱
+    angle0: t * 1.15,               // 层间角度错开
+  });
+}
+const CL_STEPS = 128;               // 花瓣中心线的积分精度
+const ROSE_R_EDGE = 145;            // 单朵玫瑰（缩放 1）的最大半径
+const ROSE_H_TOP  = 112;            // 单朵玫瑰（缩放 1）的最大高度
+
+let _areaSum = 0;
+const RING_AREAS = ROSE_RINGS.map(r => {
+  const a = r.L * r.halfW * 2 * r.petals;
+  _areaSum += a;
+  return a;
+});
+
+/* ---------------- 花束布局 ---------------- */
+const BIND_Y     = 0;        // 绑扎点（所有花茎收拢处），坐标系原点
+const HANDLE_LEN = 260;      // 绑扎点以下、手握的那一段（飘带就绑在这一段上）
+const RING_D     = 615;      // 花心到绑扎点的距离：决定花束的"鼓"度
+
+// {a 方位角, p 与花束中轴的夹角, D 到绑扎点的距离, s 缩放, tier 圈层}
+const LAYOUT = [{ a: 0, p: 0, D: RING_D, s: 1.00, tier: 0 }];
+for (let k = 0; k < 6; k++)    // 中圈 6 朵
+  LAYOUT.push({ a: k * Math.PI / 3 + rand(-0.10, 0.10),
+                p: 0.30 + rand(-0.04, 0.04), D: RING_D, s: 0.95, tier: 1 });
+for (let k = 0; k < 12; k++)   // 外圈 12 朵
+  LAYOUT.push({ a: k * Math.PI / 6 + rand(-0.08, 0.08),
+                p: 0.60 + rand(-0.05, 0.05), D: RING_D, s: 0.86, tier: 2 });
+for (let k = 0; k < 14; k++)   // 最下一圈 14 朵，几乎平躺着朝外开
+  LAYOUT.push({ a: k * Math.PI / 7 + 0.16 + rand(-0.07, 0.07),
+                p: 0.90 + rand(-0.05, 0.05), D: RING_D, s: 0.78, tier: 3 });
+
+/* ---------------- 花茎与叶子 ---------------- */
+const STEM_R      = 7;       // 花茎粗细（靠花那头，越往下越粗）
+const BUNDLE_R    = 34;      // 绑扎点以下那一整束握把的粗细
+const LEAF_LEN    = 115;     // 叶子长度
+const LEAF_WID    = 46;      // 叶子最大宽度
+
+/* ---------------- 白色飘带：绑在花茎交界处 ---------------- */
+const RIB_Y      = -45;      // 绑在哪个高度
+const RIB_BAND_R = 26;       // 绕花茎一圈的半径
+const RIB_W      = 36;       // 缎带宽度
+const RIB_TAIL   = 380;      // 两条飘带的长度
+const RIB_TAIL_W = 44;       // 飘带宽度
+const RIB_SWAY   = 70;       // 飘带末端摆动的幅度
+
+/* ============================================================
+   包装纸规格
+   标定：单朵玫瑰头直径约 9.5cm，所以 1cm ≈ ROSE_R_EDGE/4.75 世界单位
+   · 每张外纸只覆盖约 1/4 圈，5 张围一圈
+   · 相邻两张纸层高差 2.5cm，外层略高于内层（螺旋上升）
+   · 尖角 ≤ 60°，单个尖角高 5~8cm
+   · 最高的尖顶比花头低 4cm，不抢花的风头
+   · 内衬棉纸例外：纸尖与花面齐平
+   ============================================================ */
+const CM = ROSE_R_EDGE / 4.75;          // 1 厘米 ≈ 30.5 世界单位
+
+const FLOWER_TOP   = BIND_Y + RING_D + ROSE_H_TOP;   // 花头最高点
+
+const WRAP_N       = 5;                 // 围一圈用几张纸
+const WRAP_SPAN    = Math.PI / 2;       // 每张纸覆盖的圆心角：90° ≈ 1/4 圈
+const WRAP_STEP_CM = 2.5;               // 相邻两张纸的层高差（cm）
+const WRAP_TOP_CM  = 4.0;               // 最高那张纸的尖顶比花头低多少（cm）
+const WRAP_TIP_CM  = [5.5, 7.5];        // 单个尖角的高度范围（cm）
+const WRAP_ANGLE   = [44, 58];          // 尖角角度范围（度），规格要求 ≤60°
+const WRAP_RB      = 58;                // 底部收口半径
+const WRAP_RTOP    = 486;               // 顶部张开半径
+const WRAP_Y0      = 40;                // 纸从绑扎点上方的这个高度开始
+const WRAP_DENSITY = 1000;              // 外纸粒子总数（会按每张纸的高矮分配）
+
+const TISSUE_TIP_CM = 6.2;              // 内衬棉纸的纸尖高度（cm）
+const TISSUE_LOBES  = 3;                // 3 → 一圈 6 个纸尖
+const TISSUE_RB     = 30;
+const TISSUE_RTOP   = 336;
+
+/* ============================================================
+   第一步：先估算整束花的包围盒，用来定粒子尺寸和密度
+   ============================================================ */
+let predMaxR = 0, predMinY = 1e9, predMaxY = -1e9;
+LAYOUT.forEach(cfg => {
+  const cxp = Math.sin(cfg.p) * Math.cos(cfg.a) * cfg.D;
+  const cyp = BIND_Y + Math.cos(cfg.p) * cfg.D;
+  const czp = Math.sin(cfg.p) * Math.sin(cfg.a) * cfg.D;
+  predMaxR = Math.max(predMaxR, Math.hypot(cxp, czp) + ROSE_R_EDGE * cfg.s);
+  predMaxY = Math.max(predMaxY, cyp + ROSE_H_TOP * cfg.s);
+});
+predMaxR = Math.max(predMaxR, WRAP_RTOP + 60);
+predMaxY = Math.max(predMaxY, FLOWER_TOP + 20);
+predMinY = Math.min(predMinY, BIND_Y - HANDLE_LEN - 12, RIB_Y - RIB_TAIL - 40);
+
+const FIT_R = Math.max(predMaxR, (predMaxY - predMinY) * 0.5);
+const UNIT  = FIT_R / REF_FIT_R;              // 整体放大系数
+const PER_ROSE_FULL = 1500 / (UNIT * UNIT);   // 缩放 1 的玫瑰应有的粒子数
+
+/* ============================================================
+   第二步：生成所有粒子
+   ============================================================ */
+const parts = [];        // 玫瑰粒子（局部坐标，渲染时按每朵花的姿态变换）
+const world = [];        // 花茎 / 叶子 / 包装纸（世界坐标，随花束一起转）
+const roses = [];        // 每朵玫瑰的变换矩阵 + 它占用的粒子区间
+
+/* ---------- 玫瑰花瓣 ---------- */
+LAYOUT.forEach((cfg, ri) => {
+  const s = cfg.s;
+  const start = parts.length;
+
+  // 把局部 +Y 轴转到"从绑扎点指向花心"的方向
+  const cp = Math.cos(cfg.p), sp = Math.sin(cfg.p);
+  const ca = Math.cos(cfg.a), sa = Math.sin(cfg.a);
+  const m = [
+    -cp * ca,  sp * ca,  sa,
+     sp,         cp,      0,
+    -cp * sa,  sp * sa, -ca,
+  ];
+  const bx = sp * ca * cfg.D, by = BIND_Y + cp * cfg.D, bz = sp * sa * cfg.D;
+
+  const count = Math.round(PER_ROSE_FULL * s * s);
+  // 每朵花整体定一个深浅：约 40% 的花明显偏深，
+  // 其余在浅粉区间微调，一眼就能看出花与花的浓淡差别
+  const colorBias = Math.random() < 0.40 ? rand(-0.36, -0.15) : rand(-0.06, 0.16);
+  const bloom = cfg.tier * 0.17 + rand(0, 0.05);
+
+  ROSE_RINGS.forEach((ring, gi) => {
+    // 花瓣中心线：从根部出发越往外越外卷，欧拉积分得到 (半径, 高度) 曲线
+    const line = [];
+    let r0 = ring.R, y0 = ring.H;
+    for (let i = 0; i <= CL_STEPS; i++) {
+      const u = i / CL_STEPS;
+      line.push({ r: r0, y: y0, phi: ring.tilt0 + ring.curl * Math.pow(u, 1.5) });
+      const phiN = ring.tilt0 + ring.curl * Math.pow(Math.min(1, u + 1 / CL_STEPS), 1.5);
+      r0 += ring.L * Math.sin(phiN) / CL_STEPS;
+      y0 += ring.L * Math.cos(phiN) / CL_STEPS;
+    }
+
+    const perPetal = Math.max(5,
+      Math.round(count * RING_AREAS[gi] / _areaSum / ring.petals));
+
+    for (let p = 0; p < ring.petals; p++) {
+      const A = ring.angle0 + p * Math.PI * 2 / ring.petals + rand(-0.035, 0.035);
+      const erx = Math.cos(A),  erz = Math.sin(A);
+      const etx = -Math.sin(A), etz = Math.cos(A);
+      const phase = Math.random() * Math.PI * 2;
+
+      for (let i = 0; i < perPetal; i++) {
+        const u = Math.random();              // 0 = 根部，1 = 瓣尖
+        const v = Math.random() * 2 - 1;      // 花瓣左缘 → 右缘
+
+        const f  = u * CL_STEPS;
+        const i0 = Math.min(CL_STEPS - 1, f | 0);
+        const fr = f - i0;
+        const c0 = line[i0], c1 = line[i0 + 1];
+        const cr  = c0.r + (c1.r - c0.r) * fr;
+        const cyy = c0.y + (c1.y - c0.y) * fr;
+        const phi = c0.phi + (c1.phi - c0.phi) * fr;
+
+        // 花瓣宽度：根部收成 0，中段最宽，尖端收成一点
+        const hw = ring.halfW * Math.sin(Math.PI * Math.pow(u, 0.8)) * (1 - 0.25 * u);
+        // 横向起伏：抱合 + 边缘褶皱
+        const nOff = hw * (ring.cup * (1 - v * v) * (1 - 0.45 * u)
+                         + ring.ruffle * v * v * u * u * (1 + 0.9 * Math.sin(u * 11 + phase)));
+        const lat = v * hw;
+
+        const nr = Math.cos(phi), ny = -Math.sin(phi);
+        const R = cr + nOff * nr;
+        const Y = cyy + nOff * ny;
+
+        const ct = clamp(0.14 + 0.50 * u + 0.42 * ring.t + colorBias + rand(-0.08, 0.08), 0, 1);
+
+        parts.push({
+          x: (R * erx + lat * etx) * s,
+          y: Y * s,
+          z: (R * erz + lat * etz) * s,
+          img: PINK[Math.round(ct * (PINK.length - 1))],
+          size:  DOT_BASE * UNIT * rand(0.68, 1.26) * (0.85 + 0.30 * ring.t) * s,
+          alpha: 0.50 + Math.random() * 0.45,
+          delay: clamp(bloom + 0.08 * ring.t + 0.18 * u + rand(0, 0.04), 0, 0.95),
+          ph:    Math.random() * Math.PI * 2,
+          pulse: 0.7 + Math.random() * 1.8,
+        });
+      }
+    }
+  });
+
+  roses.push({
+    m, bx, by, bz, start, end: parts.length, bloomMin: bloom,
+    spin0: Math.random() * Math.PI * 2,
+    spinSpd: rand(-0.15, 0.15),
+    bobPh: Math.random() * Math.PI * 2,
+  });
+});
+
+/* ---------- 花茎、叶子 ---------- */
+const dotSize = () => DOT_BASE * UNIT * rand(0.68, 1.26);   // 和玫瑰粒子同一套尺寸
+
+function pushDot(x, y, z, img, delay, alpha) {
+  world.push({
+    x, y, z, img,
+    size: dotSize(),
+    alpha: alpha !== undefined ? alpha : 0.55 + Math.random() * 0.40,
+    delay, ph: Math.random() * Math.PI * 2,
+    pulse: 0.7 + Math.random() * 1.8,
+  });
+}
+
+// 叶面：从 (cx,cy,cz) 沿 dir 长出一片叶子，长 len、最宽 wid
+function addLeaf(cx, cy, cz, dir, len, wid, delay) {
+  let d = [dir[0], dir[1], dir[2]];
+  let l = Math.hypot(d[0], d[1], d[2]) || 1;
+  d = [d[0] / l, d[1] / l, d[2] / l];
+  // 侧向 = dir × 世界上方；dir 接近竖直时退化，换成 × 世界前方
+  const ref = Math.abs(d[1]) > 0.95 ? [0, 0, 1] : [0, 1, 0];
+  let side = [d[1] * ref[2] - d[2] * ref[1], d[2] * ref[0] - d[0] * ref[2], d[0] * ref[1] - d[1] * ref[0]];
+  l = Math.hypot(side[0], side[1], side[2]) || 1;
+  side = [side[0] / l, side[1] / l, side[2] / l];
+  const up = [side[1] * d[2] - side[2] * d[1], side[2] * d[0] - side[0] * d[2], side[0] * d[1] - side[1] * d[0]];
+
+  const n = Math.max(10, Math.round(len * wid * 0.65 / (26 * UNIT * UNIT)));
+  for (let i = 0; i < n; i++) {
+    const u = Math.random(), v = Math.random() * 2 - 1;
+    const hw = wid * Math.sin(Math.PI * Math.pow(u, 0.65));   // 叶形：中段最宽、两头尖
+    const off = -0.40 * len * u * u                              // 叶尖下垂
+              + 0.16 * wid * (1 - Math.abs(v));                  // 主脉隆起
+    const al = len * u;
+    pushDot(cx + d[0] * al + side[0] * (v * hw) + up[0] * off,
+            cy + d[1] * al + side[1] * (v * hw) + up[1] * off,
+            cz + d[2] * al + side[2] * (v * hw) + up[2] * off,
+            GREEN[Math.round(clamp(0.30 + 0.55 * u + rand(-0.15, 0.15), 0, 1) * (GREEN.length - 1))],
+            delay);
+  }
+}
+
+LAYOUT.forEach((cfg, ri) => {
+  const R = roses[ri];
+  const hx = R.bx, hy = R.by, hz = R.bz;
+  const outLen = Math.hypot(hx, hz) || 1;
+  const ux = hx / outLen, uz = hz / outLen;          // 水平向外方向
+
+  // 花茎：从花底弯到绑扎点，控制点往外顶一点，看起来是活的
+  const c1x = hx * 0.5 + ux * 24, c1y = hy * 0.5, c1z = hz * 0.5 + uz * 24;
+  const stemLen = Math.hypot(hx, hy, hz);
+  const nSeg = Math.max(6, Math.round(stemLen / (0.022 * FIT_R)));
+  for (let i = 0; i <= nSeg; i++) {
+    const t = i / nSeg, it = 1 - t;
+    // 二次贝塞尔：P0 = 花底, P1 = 控制点, P2 = 绑扎点(0,0,0)
+    const qx = it * it * hx + 2 * it * t * c1x;
+    const qy = it * it * hy + 2 * it * t * c1y;
+    const qz = it * it * hz + 2 * it * t * c1z;
+    const off = STEM_R * (0.75 + 0.85 * t);          // 越靠近绑扎点，茎越粗
+    pushDot(qx + rand(-off, off), qy + rand(-off, off), qz + rand(-off, off),
+            GREEN[Math.round(clamp(0.22 + rand(-0.12, 0.12), 0, 1) * (GREEN.length - 1))],
+            0.04 + 0.34 * t, 0.45 + Math.random() * 0.35);
+
+    // 叶子上半段挂两片，左右岔开
+    if (i === Math.round(nSeg * 0.52) || i === Math.round(nSeg * 0.76)) {
+      const sgn = (i === Math.round(nSeg * 0.52)) ? 1 : -1;
+      const base = Math.atan2(uz, ux) + sgn * rand(0.75, 1.15);
+      const len = LEAF_LEN * cfg.s * rand(0.85, 1.15);
+      addLeaf(qx, qy, qz,
+              [Math.cos(base), rand(-0.55, -0.28), Math.sin(base)],
+              len, LEAF_WID * cfg.s * rand(0.85, 1.1),
+              0.22 + 0.25 * (i / nSeg));
+    }
+  }
+
+  // 绑扎点以下：所有花茎扎成一束握把（越往下越粗一点）
+  const bAng = ri * 2.3998 + rand(-0.5, 0.5);        // 黄金角，扎得均匀
+  const nLow = Math.max(6, Math.round(HANDLE_LEN / (0.016 * FIT_R)));
+  for (let i = 1; i <= nLow; i++) {
+    const t = i / nLow;
+    // 从绑扎点(半径 0)很快张开到握把粗细：sqrt 让粒子聚在外圈，看起来才是一捆实心的茎；
+    // 指数 0.40 让它在飘带那个高度就已经够粗，缎带才绑得住
+    const rad = BUNDLE_R * (0.55 + 0.45 * Math.sqrt(Math.random()))
+              * (0.42 + 0.58 * Math.pow(t, 0.40));
+    const ang = bAng + rand(-1.1, 1.1);
+    pushDot(Math.cos(ang) * rad,
+            BIND_Y - HANDLE_LEN * t + rand(-5, 5),
+            Math.sin(ang) * rad,
+            GREEN[Math.round(clamp(0.20 + rand(-0.12, 0.12), 0, 1) * (GREEN.length - 1))],
+            0.30 + 0.20 * t, 0.42 + Math.random() * 0.32);
+  }
+});
+
+/* ---------- 包装纸：5 张外纸围一圈（螺旋上升）+ 1 层内衬棉纸 ---------- */
+
+// 每张外纸：一段 90° 的锥面，正中间顶出一个尖角
+const WRAP_H_MAX = FLOWER_TOP - WRAP_TOP_CM * CM - WRAP_Y0;   // 最高那张纸的高度，用来分配粒子
+
+for (let i = 0; i < WRAP_N; i++) {
+  const thC   = i * Math.PI * 2 / WRAP_N;                    // 这张纸的圆心方位
+  const apexY = FLOWER_TOP - (WRAP_TOP_CM + (WRAP_N - 1 - i) * WRAP_STEP_CM) * CM;
+  const tipH  = rand(WRAP_TIP_CM[0], WRAP_TIP_CM[1]) * CM;   // 尖角高度（世界单位）
+  const apexA = rand(WRAP_ANGLE[0], WRAP_ANGLE[1]) * Math.PI / 180;
+  const slope = Math.tan(apexA / 2);                          // 尖角两边下降的斜率
+  const baseY = apexY - tipH;                                 // 尖角底部的水平边高度
+  const wob   = rand(0, Math.PI * 2);                         // 褶皱相位
+
+  // 粒子数按这张纸的高矮分配：螺旋上升意味着有的纸很矮，
+  // 若每张都撒一样多的点，矮的那张会挤成一条刺眼的亮带
+  const nSheet = Math.max(50, Math.round(WRAP_DENSITY * (apexY - WRAP_Y0) / WRAP_H_MAX));
+
+  for (let n = 0; n < nSheet; n++) {
+    const psi = rand(-WRAP_SPAN / 2, WRAP_SPAN / 2);          // 在这张纸内的角向位置
+    const t   = Math.pow(Math.random(), 0.62);                // 顶部面积大，多撒点
+    const th  = thC + psi;
+
+    // 尖角：以纸的中线为顶，往两边按 angle 下降，到底了就是水平边
+    const arc = Math.abs(psi) * 400;
+    const tp  = Math.max(0, tipH - arc / slope) / tipH;       // 0 = 水平边，1 = 尖顶
+    const edgeY = baseY + tp * tipH;                          // 这一列的纸边高度
+
+    const t3 = t * t * t;
+    // 指数 < 1：纸一出绑扎点就迅速向外张开成"碗"
+    const r = WRAP_RB + (WRAP_RTOP - WRAP_RB) * Math.pow(t, 0.85)
+            + tp * 34 * t3                                     // 纸尖微微外翻
+            + Math.sin(th * 7 + t * 4.5 + wob) * 9 * t;        // 自然褶皱
+    const y = WRAP_Y0 + (edgeY - WRAP_Y0) * t;
+
+    pushDot(Math.cos(th) * r, y, Math.sin(th) * r,
+            PAPER[Math.round(clamp(0.18 + 0.62 * t + tp * 0.45 + rand(-0.12, 0.12), 0, 1)
+                             * (PAPER.length - 1))],
+            clamp(0.44 + i * 0.015 + 0.20 * t, 0, 0.95),
+            0.16 * (0.6 + Math.random() * 0.8));
+  }
+}
+
+// 内衬棉纸：整圈一层，纸尖与花面齐平
+{
+  const tipH = TISSUE_TIP_CM * CM;
+  const baseY = FLOWER_TOP - tipH;
+  for (let n = 0; n < 1500; n++) {
+    const th = Math.random() * Math.PI * 2;
+    const t  = Math.pow(Math.random(), 0.62);
+    // |sin(k·θ/2)| 在整圈上有 2k 个尖，所以 k = TISSUE_LOBES 得到 2k 个纸尖
+    const tp = Math.pow(Math.abs(Math.sin(TISSUE_LOBES * th + 0.4)), 1.3);
+    const edgeY = baseY + tp * tipH;                          // 尖顶 = 花面高度
+
+    const r = TISSUE_RB + (TISSUE_RTOP - TISSUE_RB) * Math.pow(t, 0.85)
+            + tp * 26 * t * t * t
+            + Math.sin(th * 9 + t * 5) * 7 * t;
+    const y = WRAP_Y0 + (edgeY - WRAP_Y0) * t;
+
+    pushDot(Math.cos(th) * r, y, Math.sin(th) * r,
+            TISSUE[Math.round(clamp(0.22 + 0.66 * t + tp * 0.40 + rand(-0.12, 0.12), 0, 1)
+                              * (TISSUE.length - 1))],
+            0.40 + 0.22 * t, 0.11 * (0.6 + Math.random() * 0.8));
+  }
+}
+
+/* ---------- 白色飘带：绑在花茎交界处 ----------
+   单独一个数组，因为只有它需要每帧摆一下。
+   每颗粒子存"静止时的位置"和 u（沿缎带走了多远），
+   渲染时按 u 做一次正弦位移 —— 同一 u 上的粒子一起动，
+   整条缎带保持连贯地飘，而不是散成一团。               */
+const ribbon = [];
+
+function pushRib(bx, by, bz, u, img, alpha) {
+  ribbon.push({
+    bx, by, bz, u, img, alpha,
+    size: DOT_BASE * UNIT * rand(0.68, 1.26),
+    ph: Math.random() * Math.PI * 2,
+    pulse: 0.7 + Math.random() * 1.6,
+    delay: 0.56 + Math.random() * 0.10,     // 花都开好了，最后才系上缎带
+  });
+}
+const ribImg = () => RIBBON[9 + ((Math.random() * 11) | 0)];
+
+const knotTh = rand(0, Math.PI * 2);        // 打结的方位
+const kx = Math.cos(knotTh), kz = Math.sin(knotTh);
+
+// 1) 绕花茎一圈的缎带，在打结处微微鼓起
+for (let i = 0; i < 900; i++) {
+  const th = Math.random() * Math.PI * 2;
+  const dth = ((th - knotTh + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  const bulge = Math.exp(-Math.pow(dth / 0.55, 2)) * 12;
+  const r = RIB_BAND_R + bulge + rand(-2, 2);
+  pushRib(Math.cos(th) * r, RIB_Y + rand(-RIB_W / 2, RIB_W / 2), Math.sin(th) * r,
+          0.04, ribImg(), rand(0.45, 0.85));
+}
+
+// 2) 结心：把缎带扎住的收口
+for (let i = 0; i < 260; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const b = Math.acos(rand(-1, 1));
+  const rr = 22 * Math.cbrt(Math.random());
+  pushRib(kx * (RIB_BAND_R + 6) + Math.sin(b) * Math.cos(a) * rr,
+          RIB_Y + Math.cos(b) * rr * 1.3,
+          kz * (RIB_BAND_R + 6) + Math.sin(b) * Math.sin(a) * rr,
+          0.06, ribImg(), rand(0.50, 0.90));
+}
+
+// 3) 两条飘带：从结心垂下，沿长度慢慢扭转
+const tbX = kx * (RIB_BAND_R + 4), tbZ = kz * (RIB_BAND_R + 4);
+for (const side of [1, -1]) {
+  const dirX = Math.cos(knotTh + side * 0.55), dirZ = Math.sin(knotTh + side * 0.55);
+  for (let i = 0; i < 700; i++) {
+    const u = Math.random();
+    const v = rand(-1, 1);
+    const reach = 14 + 100 * u * u;                 // 微微向外撇开
+    const psi = side * 1.15 + u * 2.9;              // 扭转角
+    const w = v * RIB_TAIL_W * 0.5 * (1 - 0.22 * u);
+    pushRib(tbX + dirX * reach + Math.cos(psi) * w,
+            RIB_Y - RIB_TAIL * u + Math.sin(u * 6.0) * 5,
+            tbZ + dirZ * reach + Math.sin(psi) * w,
+            u, ribImg(), rand(0.40, 0.80));
+  }
+}
+
+/* ============================================================
+   第三步：算出真实包围盒，自动取景
+   ============================================================ */
+let minY = 1e9, maxY = -1e9, maxR = 0;
+roses.forEach(R => {
+  const m = R.m;
+  for (let i = R.start; i < R.end; i++) {
+    const p = parts[i];
+    const X = R.bx + m[0] * p.x + m[1] * p.y + m[2] * p.z;
+    const Y = R.by + m[3] * p.x + m[4] * p.y + m[5] * p.z;
+    const Z = R.bz + m[6] * p.x + m[7] * p.y + m[8] * p.z;
+    if (Y < minY) minY = Y;
+    if (Y > maxY) maxY = Y;
+    const r = Math.hypot(X, Z);
+    if (r > maxR) maxR = r;
+  }
+});
+world.forEach(p => {
+  if (p.y < minY) minY = p.y;
+  if (p.y > maxY) maxY = p.y;
+  const r = Math.hypot(p.x, p.z);
+  if (r > maxR) maxR = r;
+});
+ribbon.forEach(p => {                        // 把飘带的摆动幅度也算进取景范围
+  const a = p.u * p.u * RIB_SWAY;
+  if (p.by - a * 0.28 < minY) minY = p.by - a * 0.28;
+  if (p.by + a * 0.28 > maxY) maxY = p.by + a * 0.28;
+  const r = Math.hypot(p.bx, p.bz) + a * 1.2;
+  if (r > maxR) maxR = r;
+});
+const CENTER_Y = (minY + maxY) / 2;
+const VIEW_R   = Math.max(maxR, (maxY - minY) * 0.5);
+
+/* ---------------- 周围飘浮的星尘 ---------------- */
+const sparks = [];
+for (let i = 0; i < TOTAL_SPARK; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const rad = VIEW_R * (0.25 + Math.pow(Math.random(), 0.6) * 1.1);
+  sparks.push({
+    x: Math.cos(a) * rad, z: Math.sin(a) * rad,
+    y: CENTER_Y - VIEW_R + Math.random() * VIEW_R * 2,
+    sp: VIEW_R * rand(0.02, 0.07),
+    size: DOT_BASE * UNIT * rand(0.45, 1.0),
+    a0: 0.22 + Math.random() * 0.50,
+    ph: Math.random() * Math.PI * 2,
+    img: PAPER[14 + ((Math.random() * 6) | 0)],
+  });
+}
+
+/* ---------------- 交互：拖动旋转 ---------------- */
+let rotY = 0, tiltX = 0.20, dragging = false, lastPX = 0, lastPY = 0;
+
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; lastPX = e.clientX; lastPY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  rotY  += (e.clientX - lastPX) * 0.008;
+  tiltX  = clamp(tiltX + (e.clientY - lastPY) * 0.005, -0.55, 0.95);
+  lastPX = e.clientX; lastPY = e.clientY;
+});
+canvas.addEventListener('pointerup',     () => { dragging = false; });
+canvas.addEventListener('pointercancel', () => { dragging = false; });
+
+/* ---------------- 投影：世界坐标 → 屏幕坐标 ---------------- */
+let V_cY = 1, V_sY = 0, V_cT = 1, V_sT = 0, V_cx = 0, V_cyc = 0;
+let _sx = 0, _sy = 0, _k = 0;
+function project(X, Y, Z) {
+  const x = X * V_cY - Z * V_sY;
+  const z = X * V_sY + Z * V_cY;
+  const y = Y - CENTER_Y;
+  const y2 = y * V_cT - z * V_sT;
+  const z2 = y * V_sT + z * V_cT;
+  const zc = z2 + CAM;
+  if (zc < 80) return false;
+  const k = FOV / zc;
+  const sx = V_cx + x * k * SCALE;
+  const sy = V_cyc - y2 * k * SCALE;
+  if (sx < -60 || sx > VW + 60 || sy < -60 || sy > VH + 60) return false;
+  _sx = sx; _sy = sy; _k = k;
+  return true;
+}
+
+/* ---------------- 主循环 ---------------- */
+const T0 = performance.now();
+let prev = T0;
+let drawEvery = 0, fpsAcc = 144, fpsN = 144;     // 帧率兜底：太慢就自动少画一部分粒子
+
+function frame(now) {
+  const dt   = Math.min(0.05, (now - prev) / 1000); prev = now;
+  const time = (now - T0) / 1000;
+  const grow = Math.min(1, (now - T0) / BLOOM_MS);
+
+  fpsAcc += dt; fpsN++;
+  if (fpsN >= 30) {
+    const avg = fpsAcc / fpsN; fpsAcc = 0; fpsN = 0;
+    if (avg > 0.030 && drawEvery < 4) drawEvery *= 2;
+    else if (avg < 0.019 && drawEvery > 1) drawEvery /= 2;
+  }
+
+  if (!dragging) rotY += AUTO_SPIN * dt;
+  const tilt = tiltX + Math.sin(time * 0.6) * 0.04;
+
+  V_cY = Math.cos(rotY); V_sY = Math.sin(rotY);
+  V_cT = Math.cos(tilt); V_sT = Math.sin(tilt);
+
+  // 清屏（加色混合每帧都要从纯黑开始）
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#04000a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  SCALE = Math.min(VW, VH) * 0.35 / VIEW_R;      // 自动取景
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 1;
+
+  V_cx  = VW / 2;
+  V_cyc = VH / 2 + VH * 0.045;
+
+  // 花束中心的柔光
+  const glowR = VIEW_R * 0.9 * SCALE;
+  const gl = ctx.createRadialGradient(V_cx, V_cyc, 0, V_cx, V_cyc, glowR);
+  gl.addColorStop(0.00, 'rgba(180, 120, 140, 0.15)');
+  gl.addColorStop(0.45, 'rgba(130,  70,  90, 0.06)');
+  gl.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = gl;
+  ctx.fillRect(V_cx - glowR, V_cyc - glowR, glowR * 2, glowR * 2);
+
+  // ---- 逐朵玫瑰 ----
+  for (let r = 0; r < roses.length; r++) {
+    const R = roses[r];
+    if (grow <= R.bloomMin) continue;
+
+    // 这朵花当前的自转：M = 基础朝向矩阵 · Ry(spin)
+    const spin = R.spin0 + R.spinSpd * time;
+    const cs = Math.cos(spin), ss = Math.sin(spin);
+    const m = R.m;
+    const m0 = m[0] * cs - m[2] * ss, m2 = m[0] * ss + m[2] * cs;
+    const m3 = m[3] * cs - m[5] * ss, m5 = m[3] * ss + m[5] * cs;
+    const m6 = m[6] * cs - m[8] * ss, m8 = m[6] * ss + m[8] * cs;
+    const m1 = m[1], m4 = m[4], m7 = m[7];
+    const bob = Math.sin(time * 0.8 + R.bobPh) * FIT_R * 0.010;
+
+    for (let i = R.start; i < R.end; i++) {
+      if (drawEvery > 1 && (i % drawEvery)) continue;
+      const p = parts[i];
+      if (grow <= p.delay) continue;
+      const appear = Math.min(1, (grow - p.delay) / 0.16);
+
+      if (!project(R.bx + m0 * p.x + m1 * p.y + m2 * p.z,
+                   R.by + m3 * p.x + m4 * p.y + m5 * p.z + bob,
+                   R.bz + m6 * p.x + m7 * p.y + m8 * p.z)) continue;
+
+      ctx.globalAlpha = clamp(p.alpha * appear * (0.78 + 0.22 * Math.sin(time * p.pulse + p.ph)), 0, 1);
+      const sz = p.size * _k * SCALE * SPRITE_MUL * appear;
+      ctx.drawImage(p.img, _sx - sz / 2, _sy - sz / 2, sz, sz);   // 加色混合无需深度排序
+    }
+  }
+
+  // ---- 花茎 / 叶子 / 包装纸 ----
+  for (let i = 0; i < world.length; i++) {
+    if (drawEvery > 1 && (i % drawEvery)) continue;
+    const p = world[i];
+    if (grow <= p.delay) continue;
+    const appear = Math.min(1, (grow - p.delay) / 0.16);
+    if (!project(p.x, p.y, p.z)) continue;
+
+    ctx.globalAlpha = clamp(p.alpha * appear * (0.80 + 0.20 * Math.sin(time * p.pulse + p.ph)), 0, 1);
+    const sz = p.size * _k * SCALE * SPRITE_MUL * appear;
+    ctx.drawImage(p.img, _sx - sz / 2, _sy - sz / 2, sz, sz);
+  }
+
+  // ---- 白色飘带 ----
+  for (let i = 0; i < ribbon.length; i++) {
+    if (drawEvery > 1 && (i % drawEvery)) continue;
+    const p = ribbon[i];
+    if (grow <= p.delay) continue;
+    const appear = Math.min(1, (grow - p.delay) / 0.16);
+
+    // 幅度沿缎带增长：绑扎点附近几乎不动，末端飘得最厉害
+    const amp = p.u * p.u * RIB_SWAY;
+    if (!project(p.bx + Math.sin(p.u * 3.1 - time * 1.7 + p.ph) * amp,
+                 p.by + Math.sin(p.u * 2.8 - time * 1.1 + p.ph) * amp * 0.28,
+                 p.bz + Math.cos(p.u * 2.4 - time * 1.3 + p.ph * 1.7) * amp * 0.70)) continue;
+
+    ctx.globalAlpha = clamp(p.alpha * appear * (0.82 + 0.18 * Math.sin(time * p.pulse + p.ph)), 0, 1);
+    const sz = p.size * _k * SCALE * SPRITE_MUL * appear;
+    ctx.drawImage(p.img, _sx - sz / 2, _sy - sz / 2, sz, sz);
+  }
+
+  // ---- 星尘 ----
+  for (let i = 0; i < sparks.length; i++) {
+    const s = sparks[i];
+    s.y += s.sp * dt;
+    if (s.y > CENTER_Y + VIEW_R) s.y = CENTER_Y - VIEW_R;
+
+    const x = s.x * V_cY - s.z * V_sY;
+    const z = s.x * V_sY + s.z * V_cY;
+    const y = s.y - CENTER_Y;
+    const z2 = y * V_sT + z * V_cT;
+    const zc = z2 + CAM;
+    if (zc < 80) continue;
+    const k = FOV / zc;
+    const sx = V_cx + x * k * SCALE;
+    const sy = V_cyc - (y * V_cT - z * V_sT) * k * SCALE;
+    if (sx < -40 || sx > VW + 40 || sy < -40 || sy > VH + 40) continue;
+
+    ctx.globalAlpha = clamp(s.a0 * (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 1.6 + s.ph))) * grow, 0, 1);
+    const sz = s.size * k * SCALE * SPRITE_MUL;
+    ctx.drawImage(s.img, sx - sz / 2, sy - sz / 2, sz, sz);
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+<script>
+  (function () {
+    var arrive = document.getElementById('arrive');
+    var back = document.getElementById('back');
+
+    /* 进来先黑屏，下一帧开始淡出，正好接上花束的生长动画 */
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { arrive.classList.add('is-out'); });
+    });
+    setTimeout(function () { arrive.style.display = 'none'; }, 1500);
+
+    /* 返回首页：先黑幕合上，再跳转 */
+    if (back) {
+      back.addEventListener('click', function (e) {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        arrive.style.display = '';
+        arrive.classList.remove('is-out');
+        setTimeout(function () { window.location.href = 'index.html'; }, 950);
+      });
+    }
+  })();
+</script><script src="js/auth.js" defer></script>
+</body>
+</html>·

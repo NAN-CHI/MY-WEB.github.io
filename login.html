@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-auth-open>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light" />
+<title>登录 · J Q</title>
+<meta name="description" content="登录后才能查看 J Q 的站点内容。" />
+<meta name="theme-color" content="#F3EDE3" />
+<meta name="robots" content="noindex" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%23F3EDE3'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23D8432A'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/style.css" />
+<script>
+  /* 主题：先看上次的选择，没有就跟系统走 */
+  try {
+    var savedTheme = localStorage.getItem('site-theme');
+    if (!savedTheme) {
+      savedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+</script>
+</head>
+<body>
+
+<div class="auth-page">
+
+  <header class="topbar">
+    <a class="brand" href="index.html">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <span>J Q</span>
+    </a>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换到夜间模式">
+      <svg class="theme-toggle__icon theme-toggle__icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.5 14.2A8.6 8.6 0 1 1 9.8 3.5a7 7 0 0 0 10.7 10.7Z"/></svg>
+      <svg class="theme-toggle__icon theme-toggle__icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>
+    </button>
+  </header>
+
+  <main class="auth-main">
+    <div class="auth-card">
+
+      <p class="eyebrow">
+        <span class="eyebrow__line" aria-hidden="true"></span>
+        私密区域 · Sign in
+      </p>
+
+      <h1 class="auth-title">先登录一下。</h1>
+      <p class="auth-lede" id="authLede">这个站点目前只对朋友开放。</p>
+
+      <form class="auth-form" id="authForm" novalidate>
+        <label class="auth-field" id="authEmailField">
+          <span class="auth-label">邮箱</span>
+          <input class="auth-input" type="email" id="authEmail" name="email"
+                 autocomplete="username" inputmode="email" placeholder="you@example.com" required />
+        </label>
+
+        <label class="auth-field">
+          <span class="auth-label" id="authPassLabel">密码</span>
+          <input class="auth-input" type="password" id="authPass" name="password"
+                 autocomplete="current-password" placeholder="••••••••" required />
+        </label>
+
+        <p class="auth-error" id="authError" role="alert" aria-live="polite"></p>
+
+        <button class="cta auth-submit" type="submit" id="authSubmit">
+          <span class="cta__dot" aria-hidden="true"></span>
+          <span>登录</span>
+          <span class="cta__arrow" aria-hidden="true">→</span>
+        </button>
+      </form>
+
+      <p class="auth-note" id="authNote">
+        没有账号？找站主要一个。<br />
+        登录状态会记在这台设备上，下次打开不用重新输。
+      </p>
+
+    </div>
+  </main>
+
+</div>
+
+<script src="js/app.js" defer></script>
+<script src="js/auth.js" defer></script>
+<script src="js/login.js" defer></script>
+</body>
+</html>

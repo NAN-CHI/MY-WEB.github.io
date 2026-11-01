@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light" />
+<title>笔记 · J Q</title>
+<meta name="description" content="J Q 的笔记：关于设计、动效、排版和一些日常。" />
+<meta name="theme-color" content="#F3EDE3" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%23F3EDE3'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23D8432A'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/style.css" />
+<script>
+  /* 主题：先看上次的选择，没有就跟系统走 */
+  try {
+    var savedTheme = localStorage.getItem('site-theme');
+    if (!savedTheme) {
+      savedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+
+  /* 从别的页面点链接过来时，先让幕布覆盖屏幕，避免第一帧闪白 */
+  try {
+    if (/(?:^|[?&])via=veil(?:&|$)/.test(location.search)) {
+      document.documentElement.classList.add('is-entering');
+    }
+  } catch (e) {}
+</script>
+<script src="js/auth-gate.js"></script>
+</head>
+<body id="top">
+
+<div class="veil" id="veil" aria-hidden="true">
+  <div class="veil__road"></div>
+  <div class="veil__car is-moving" data-car></div>
+  <p class="veil__label" id="veilLabel">笔记 · Notes</p>
+</div>
+
+<div class="page">
+
+  <header class="topbar">
+    <a class="brand" href="index.html" data-transition data-veil="主页 · Home">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <span>J Q</span>
+    </a>
+    <div class="topbar__right">
+      <nav class="nav" aria-label="主导航">
+        <a class="nav__link" href="index.html?via=veil" data-transition data-veil="主页 · Home">主页</a>
+        <a class="nav__link" href="about.html?via=veil" data-transition data-veil="关于我 · About">关于我</a>
+        <a class="nav__link" href="works.html?via=veil" data-transition data-veil="作品 · Work">作品</a>
+        <a class="nav__link" href="notes.html" aria-current="page">笔记</a>
+        <a class="nav__link" href="friends.html?via=veil" data-transition data-veil="朋友们 · Friends">朋友们</a>
+        <a class="nav__link" href="contact.html?via=veil" data-transition data-veil="联系 · Contact">联系</a>
+      </nav>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换到夜间模式">
+        <svg class="theme-toggle__icon theme-toggle__icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.5 14.2A8.6 8.6 0 1 1 9.8 3.5a7 7 0 0 0 10.7 10.7Z"/></svg>
+        <svg class="theme-toggle__icon theme-toggle__icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap page-main">
+
+    <p class="eyebrow">
+      <span class="eyebrow__line" aria-hidden="true"></span>
+      笔记 · Notes
+    </p>
+
+    <h1 class="page-title">想到就写，<br />不一定有用。</h1>
+
+    <p class="page-lede">
+      关于设计、动效与排版的一些记录，偶尔也写点日常。
+      点开任意一条可以展开全文。
+    </p>
+
+    <!-- ✏️ 笔记：照着 <details> 的结构往下加就行 -->
+    <div class="notes" data-reveal-scroll>
+
+      <details class="note">
+        <summary class="note__head">
+          <span class="note__date">2026.09</span>
+          <span class="note__title">把加载页做成一段路</span>
+          <span class="note__meta">设计 / 动效</span>
+          <span class="note__icon" aria-hidden="true"></span>
+        </summary>
+        <div class="note__body">
+          <p>
+            加载页最尴尬的地方在于：它在为「还没发生的事」占用你的时间。
+            所以它要么足够短，要么足够好看。我选了后者，但给它加了一条底线——等资源真的就绪再收尾。
+          </p>
+          <p>
+            小车沿着虚线往前走，百分比在右上角跳。轮子转、速度线往后飞、路面往反方向走，
+            这三个动作方向一致，人才会觉得它真的在往前开。细节比动画本身更重要。
+          </p>
+        </div>
+      </details>
+
+      <details class="note">
+        <summary class="note__head">
+          <span class="note__date">2026.07</span>
+          <span class="note__title">动效是标点，不是修辞</span>
+          <span class="note__meta">动效</span>
+          <span class="note__icon" aria-hidden="true"></span>
+        </summary>
+        <div class="note__body">
+          <p>
+            我常把动效当标点用：淡入是逗号，收起的抽屉是句号，
+            那种「啪」一下弹出来的提示是感叹号。一句话里符号用太多，读者会烦。
+          </p>
+          <p>
+            判断标准很简单：把动效全部关掉，界面还能不能用？
+            如果能，说明它是标点；如果不能，那它大概是承重墙——这时候要重新想想结构。
+          </p>
+        </div>
+      </details>
+
+      <details class="note">
+        <summary class="note__head">
+          <span class="note__date">2026.05</span>
+          <span class="note__title">为什么我还在手写 CSS</span>
+          <span class="note__meta">前端</span>
+          <span class="note__icon" aria-hidden="true"></span>
+        </summary>
+        <div class="note__body">
+          <p>
+            不是因为怀旧。是因为当我知道每一个像素从哪来，改起来才不心虚。
+            框架解决的是「怎么快」，但个人项目里，思考的时间往往比打字的时间长。
+          </p>
+          <p>
+            当然也有代价：命名要想、复用要克制、复杂组件写起来慢。
+            我的折中是——布局和排版手写，组件库只用来兜底。
+          </p>
+        </div>
+      </details>
+
+      <details class="note">
+        <summary class="note__head">
+          <span class="note__date">2026.03</span>
+          <span class="note__title">中文网页的行高</span>
+          <span class="note__meta">排版</span>
+          <span class="note__icon" aria-hidden="true"></span>
+        </summary>
+        <div class="note__body">
+          <p>
+            中文没有小写字母的上升部和下降部，同样字号下看起来比西文更「满」，
+            行高需要更大一点，1.8 到 2.0 往往比 1.5 舒服。
+          </p>
+          <p>
+            另一个坑是字距：标题加一点点 letterspacing 会舒展，正文加了反而散。
+            中文的节奏靠断句和留白，不太靠字距。
+          </p>
+        </div>
+      </details>
+
+      <details class="note">
+        <summary class="note__head">
+          <span class="note__date">2025.12</span>
+          <span class="note__title">骑车时想到的三个界面</span>
+          <span class="note__meta">日常</span>
+          <span class="note__icon" aria-hidden="true"></span>
+        </summary>
+        <div class="note__body">
+          <p>
+            红绿灯的倒计时：它从不告诉你「还要多久才能走」，只告诉你「还剩几秒」。
+            信息很少，但足够行动。
+          </p>
+          <p>
+            路口的盲道：它不阻止你走错，只是轻轻提醒一下。
+            好的空状态大概也是这样——不拦人，只给方向。
+          </p>
+        </div>
+      </details>
+
+      <details class="note">
+        <summary class="note__head">
+          <span class="note__date">2025.10</span>
+          <span class="note__title">少即是多，但少很难</span>
+          <span class="note__meta">观点</span>
+          <span class="note__icon" aria-hidden="true"></span>
+        </summary>
+        <div class="note__body">
+          <p>
+            删掉一个按钮只要一秒，想清楚为什么删掉它、删掉之后谁来承担这个功能，
+            可能要一周。
+          </p>
+          <p>
+            所以「极简」从来不是一种风格，而是一个结论。
+            看起来空的地方，底下往往是密密麻麻的取舍。
+          </p>
+        </div>
+      </details>
+
+    </div>
+
+  </main>
+
+  <footer class="site-foot">
+    <div class="site-foot__inner">
+          <div class="site-foot__cta">
+      <p class="site-foot__title">写得不怎么样？<br />那就聊聊吧。</p>
+      <div class="site-foot__actions">
+        <a class="cta" href="contact.html?via=veil" data-transition data-veil="联系 · Contact">
+            <span class="cta__dot" aria-hidden="true"></span>
+            <span>聊聊</span>
+            <span class="cta__arrow" aria-hidden="true">→</span>
+          </a>
+        <a class="cta cta--flower" href="花.html?via=veil" data-transition data-veil="花 · Flowers">
+          <span class="cta__flower" aria-hidden="true">✿</span>
+          <span>看到最后了，送你一朵花吧</span>
+        </a>
+      </div>
+    </div>
+
+<div class="site-foot__meta">
+        <span>© 2026 J Q</span>
+        <div class="site-foot__links">
+          <a href="mailto:2167203486@qq.com">Email</a>
+          <a href="#" aria-label="GitHub">GitHub</a>
+          <a href="#" aria-label="即刻">即刻</a>
+        </div>
+        <a href="#top">回到顶部 ↑</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<noscript>
+  <style>
+    html.is-entering .veil { display: none !important; }
+  </style>
+</noscript>
+
+<!-- 落下来的小信封：点一下直接写邮件 -->
+<a class="envelope" href="mailto:2167203486@qq.com" aria-label="写信给我" title="写信给我">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <rect x="2.5" y="5" width="19" height="14" rx="2.6"/>
+    <path d="M3.2 6.4 12 12.7l8.8-6.3"/>
+  </svg>
+</a>
+<script src="js/car.js" defer></script>
+<script src="js/app.js" defer></script>
+<script src="js/letters.js" defer></script>
+<script src="js/auth.js" defer></script>
+</body>
+</html>
