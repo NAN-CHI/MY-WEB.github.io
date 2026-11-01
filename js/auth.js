@@ -12,10 +12,10 @@
        'supabase' = 邮箱 + 密码，需要能访问 supabase.co
      将来网络能通了，把下面这行改成 'supabase' 就切回去。
      --------------------------------------------------------------- */
-  var AUTH_MODE = 'local';
+  var AUTH_MODE = 'supabase';
 
   /* local 模式的口令：想改就改这一行，然后告诉朋友新口令 */
-  var LOCAL_PASS = 'jq-friends';
+  var LOCAL_PASS = '';
   var LOCAL_DAYS = 30;                      /* 登录状态保留天数 */
   var LOCAL_KEY  = 'jq-local-unlock';
 
